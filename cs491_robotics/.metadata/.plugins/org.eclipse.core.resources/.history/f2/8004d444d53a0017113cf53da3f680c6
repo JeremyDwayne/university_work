@@ -1,0 +1,134 @@
+package edu.uwec.cs.robotics.segway;
+
+import lejos.hardware.Sound;
+import lejos.hardware.Button;
+import lejos.hardware.motor.UnregulatedMotor;
+import lejos.hardware.port.MotorPort;
+import lejos.hardware.port.SensorPort;
+import lejos.hardware.sensor.EV3GyroSensor;
+import lejos.robotics.SampleProvider;
+import lejos.utility.Delay;
+
+public class SegwayController extends Thread {
+
+	public static EV3GyroSensor gyroSensor;
+	public static UnregulatedMotor left;
+	public static UnregulatedMotor right;
+
+	private static double speed = 0;
+	private static double turn = 0;
+
+	private static void init() {
+		left = new UnregulatedMotor(MotorPort.D);
+		right = new UnregulatedMotor(MotorPort.A);
+
+		gyroSensor = new EV3GyroSensor(SensorPort.S1);
+	}
+	
+	private void deinit(){
+		right.close();
+		left.close();
+		gyroSensor.close();
+	}
+	
+	// Sets speed and limits to max of +/- 10
+	public void setSpeed(double s) {
+		if (s > 10)  s =  10;
+		if (s < -10) s = -10;
+		speed = s;
+	}
+	
+	public void turn(double t) {
+		if(t == 0) turn = 0;
+		else if(t == 1) turn = 50;
+		else if(t == -1) turn = -50;
+	}
+	
+	
+	// PD controller
+	public static double pd(double motorSpeed, double motorPosition, double globalSpeed, double globalAngle) {
+		return (0.08 * motorSpeed) + (0.12 * motorPosition) + (0.8 * globalSpeed) + (15.0 * globalAngle);
+	}
+	
+	public void run() {
+		init();
+
+		left.resetTachoCount();
+		right.resetTachoCount();
+		gyroSensor.reset();
+		
+		SampleProvider gyro = gyroSensor.getRateMode();
+		float[] gyroReadings = new float[gyro.sampleSize()];
+
+		double rate = 0;
+		double power = 0;
+		double tachoSum = 0;
+		double tacho = 0;
+		double motorPosition = 0;
+		double motorSpeed = 0;
+		double motorDerivative1 = 0;
+		double motorDerivative2 = 0;
+		double motorDerivative3 = 0;
+
+
+		int num = 0;
+		boolean start = false;
+
+		long lastStep = System.nanoTime();
+		double globalAngle = -0.25;
+		Sound.beepSequenceUp();
+		Thread.currentThread().setPriority(MAX_PRIORITY);
+
+		while(Button.ESCAPE.isUp()) {
+			long now = System.nanoTime();
+			double loopTime = (now - lastStep) / 1000000000.0;
+			lastStep = now;
+
+			//Get Readings from Gyroscope
+			gyro.fetchSample(gyroReadings, 0);
+			rate = -gyroReadings[0];
+			
+			globalAngle = globalAngle + (rate * loopTime);
+
+			double tachoSumOld = tachoSum;
+			double tachoR = right.getTachoCount();
+			double tachoL = left.getTachoCount();
+			tachoSum = tachoR + tachoL;
+			tacho = tachoSum - tachoSumOld;
+
+			motorPosition = motorPosition + tacho;
+
+			motorSpeed = ((tacho+motorDerivative1+motorDerivative2+motorDerivative3) / 4.0) / loopTime;
+
+			motorDerivative3 = motorDerivative2;
+			motorDerivative2 = motorDerivative1;
+			motorDerivative1 = tacho;
+
+			// adjust speed for global speed, default=2;
+			motorPosition -= speed;
+			
+			// calculates necessary power to stay balanced
+			power = pd(motorSpeed, motorPosition, rate, globalAngle);
+
+			// Caps the power to DC motor at 100% or -100%
+			//power = (power > 100) ? 100 : -100;
+			
+			if(start){
+				right.setPower((int) (power));
+				left.setPower((int) (power));
+			}
+
+			Delay.msDelay(10);
+			num++;
+			// Gyroscope requires 100ms to start reading accurately
+			// This also allows the speed controller to collect enough data for rotational speed
+			if (num == 10) start = true;
+		}
+
+
+		// Close ports to motors/sensors
+		deinit();
+	}
+
+}
+

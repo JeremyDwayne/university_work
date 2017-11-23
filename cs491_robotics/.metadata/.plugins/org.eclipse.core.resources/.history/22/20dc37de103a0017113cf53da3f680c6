@@ -1,0 +1,154 @@
+package edu.uwec.cs.robotics.segway;
+
+import lejos.hardware.Sound;
+import lejos.hardware.Button;
+import lejos.hardware.motor.UnregulatedMotor;
+import lejos.hardware.port.MotorPort;
+import lejos.hardware.port.SensorPort;
+import lejos.hardware.sensor.EV3GyroSensor;
+import lejos.hardware.sensor.EV3UltrasonicSensor;
+import lejos.hardware.sensor.SensorModes;
+import lejos.robotics.SampleProvider;
+import lejos.utility.Delay;
+
+public class SegwayController extends Thread {
+
+	public static EV3GyroSensor gyroSensor;
+	public static SensorModes ultrasonicSensor;
+	public static SampleProvider distance;
+	public static UnregulatedMotor left;
+	public static UnregulatedMotor right;
+
+	private static double speed = 0;
+	private static double turn = 0;
+
+	private static void init() {
+		left = new UnregulatedMotor(MotorPort.D);
+		right = new UnregulatedMotor(MotorPort.A);
+
+		gyroSensor = new EV3GyroSensor(SensorPort.S1);
+
+		ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S4);
+		distance = ultrasonicSensor.getMode("Distance");
+	}
+	
+	private void deinit(){
+		right.close();
+		left.close();
+		gyroSensor.close();
+	}
+	
+	// Sets speed and limits to max of +/- 10
+	public void setSpeed(double s) {
+		if (s > 10)  s =  10;
+		if (s < -10) s = -10;
+		speed = s;
+	}
+	
+	private void checkUltraSonic(){
+		float[] samples = new float[distance.sampleSize()];
+		distance.fetchSample(samples, 0);
+		double dist = samples[0];
+		System.out.println("Distance: "+dist);
+		boolean ready = true;
+		if (dist < 0.2) turn(1);
+		setSpeed(0);
+		if (ready){
+			Sound.buzz();
+			ready = false;
+		}
+		if (dist > 0.4) ready=true;
+	}
+	
+	// PD controller
+	public static double pd(double motorSpeed, double motorPosition, double globalSpeed, double globalAngle) {
+		return (0.08 * motorSpeed) + (0.12 * motorPosition) + (0.8 * globalSpeed) + (15.0 * globalAngle);
+	}
+	
+	public void run() {
+		init();
+
+		left.resetTachoCount();
+		right.resetTachoCount();
+		gyroSensor.reset();
+		
+		SampleProvider gyro = gyroSensor.getRateMode();
+		float[] gyroReadings = new float[gyro.sampleSize()];
+
+		double rate = 0;
+		double power = 0;
+		double tachoSum = 0;
+		double tacho = 0;
+		double motorPosition = 0;
+		double motorSpeed = 0;
+		double motorDerivative1 = 0;
+		double motorDerivative2 = 0;
+		double motorDerivative3 = 0;
+
+
+		int num = 0;
+		boolean start = false;
+
+		long lastStep = System.nanoTime();
+		double globalAngle = -0.25;
+		Sound.beepSequenceUp();
+		Thread.currentThread().setPriority(MAX_PRIORITY);
+
+		while(Button.ESCAPE.isUp()) {
+			//System.out.println("Round: " + num);
+			long now = System.nanoTime();
+			double loopTime = (now - lastStep) / 1000000000.0;
+			lastStep = now;
+
+			//Get Readings from Gyroscope
+			gyro.fetchSample(gyroReadings, 0);
+			rate = -gyroReadings[0];
+
+			//System.out.println("Rate: "+rate);
+			
+			globalAngle = globalAngle + (rate * loopTime);
+			//System.out.println("gAng: "+globalAngle);
+
+			double tachoSumOld = tachoSum;
+			double tachoR = right.getTachoCount();
+			double tachoL = left.getTachoCount();
+			tachoSum = tachoR + tachoL;
+			tacho = tachoSum - tachoSumOld;
+
+			motorPosition = motorPosition + tacho;
+
+			//mSpd = ((mD + mDP1 + mDP2 + mDP3) / 4.0) / dt; // motor rotational speed 
+			motorSpeed = ((tacho+motorDerivative1+motorDerivative2+motorDerivative3) / 4.0) / loopTime;
+
+			motorDerivative3 = motorDerivative2;
+			motorDerivative2 = motorDerivative1;
+			motorDerivative1 = tacho;
+
+			// adjust speed for global speed, default=2;
+			motorPosition -= speed;
+			
+			// calculates necessary power to stay balanced
+			power = pd(motorSpeed, motorPosition, rate, globalAngle);
+
+			power = 0.08 * motorSpeed + 0.12 * motorPosition + 0.8 * rate + 15.0 * globalAngle;
+			// Caps the power to DC motor at 100% or -100%
+			power = (power > 100) ? 100 : -100;
+			
+			checkUltraSonic();
+
+			if(start){
+				right.setPower((int) (power-turn));
+				left.setPower((int) (power+turn));
+			}
+
+			Delay.msDelay(10);
+			num++;
+			if (num == 10) start = true;
+		}
+
+
+		// Close ports to motors/sensors
+		deinit();
+	}
+
+}

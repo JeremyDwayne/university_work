@@ -1,0 +1,5 @@
+package edu.uwec.cs.robotics.segway;
+
+public class GyroBoyApp {
+
+}

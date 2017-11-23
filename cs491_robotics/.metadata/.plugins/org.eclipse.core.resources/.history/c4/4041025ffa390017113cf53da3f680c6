@@ -1,0 +1,9 @@
+package edu.uwec.cs.robotics.segway;
+
+
+public class Segway {
+	public static void main(String[] args) {
+		SegwayController segway = new SegwayController();
+		segway.start();
+	}
+}

@@ -1,0 +1,30 @@
+package edu.uwec.cs.robotics.segway;
+
+import lejos.hardware.sensor.EV3UltrasonicSensor;
+import lejos.hardware.port.SensorPort;
+
+public class UltrasonicController extends Thread {
+	public static SensorModes ultrasonicSensor;
+	public static SampleProvider distance;
+
+	private void init(){
+		ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S4);
+		distance = ultrasonicSensor.getMode("Distance");
+	}
+	public void run(){
+		init();
+		float[] samples = new float[distance.sampleSize()];
+		distance.fetchSample(samples, 0);
+		double dist = samples[0];
+		boolean ready = true;
+		if (dist < 0.2) {
+			setSpeed(0);
+			if (ready){
+				Sound.buzz();
+				ready = false;
+			}
+		}
+		if (dist > 0.4) ready=true;
+	}
+
+}

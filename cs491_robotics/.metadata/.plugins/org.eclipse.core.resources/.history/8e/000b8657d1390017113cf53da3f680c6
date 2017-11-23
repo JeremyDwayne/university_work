@@ -1,0 +1,99 @@
+package edu.uwec.cs.robotics.segway;
+
+import lejos.hardware.Button;
+import lejos.hardware.motor.EV3LargeRegulatedMotor;
+import lejos.hardware.port.MotorPort;
+import lejos.hardware.port.SensorPort;
+import lejos.hardware.sensor.EV3GyroSensor;
+import lejos.hardware.sensor.EV3UltrasonicSensor;
+import lejos.hardware.sensor.SensorModes;
+import lejos.robotics.SampleProvider;
+import lejos.utility.Delay;
+
+public class Segway {
+	public static SensorModes gyroSensor;
+	public static SampleProvider gyro;
+	public static SensorModes ultrasonicSensor;
+	public static SampleProvider distance;
+	public static EV3LargeRegulatedMotor left;
+	public static EV3LargeRegulatedMotor right;
+	//public static UnregulatedMotor leftM;
+	//public static UnregulatedMotor rightM;
+	public static final double Kp = 1.2;
+	public static final double Kd = 0.25;
+
+	private static double speed = 0;
+
+
+	
+	private static void setupMotors() {
+		left = new EV3LargeRegulatedMotor(MotorPort.D);
+		right = new EV3LargeRegulatedMotor(MotorPort.A);
+	}
+
+	private static void setupSensors() {
+		gyroSensor = new EV3GyroSensor(SensorPort.S1);
+		gyro = ((EV3GyroSensor) gyroSensor).getAngleAndRateMode();
+		ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S4);
+		distance = ultrasonicSensor.getMode("Distance");
+	}
+	
+	// PD controller
+	public static double pd(double angle, double angleVelocity, double tachoCount, double rotationalSpeed) {
+		return (angle * 15 + angleVelocity * 0.8 + tachoCount * 0.12 + rotationalSpeed * 0.8);
+	}
+	
+	public static void main(String[] args) {
+		setupMotors();
+		setupSensors();
+		
+		float[] gyroReadings = new float[gyro.sampleSize()];
+
+		double gAng = -0.25;
+		double gSpd = 0;
+		double pwr = 0;
+		double angle = 0;
+
+		long lastTimeStep = System.nanoTime();
+
+		while(!Button.ESCAPE.isDown()) {
+			long now = System.nanoTime();
+			double dt = (now - lastTimeStep) / 1000000000.0;	// Time step in seconds
+			lastTimeStep = now;
+
+			//Get Readings from Gyroscope
+			gyro.fetchSample(gyroReadings, 0);
+
+			double rate = -gyroReadings[0];
+			angle = gyroReadings[1];
+			
+			gAng = gAng + (gSpd * dt);
+
+			double motorSpeed = (left.getRotationSpeed() + right.getRotationSpeed())/2;
+			double tacho = (left.getTachoCount() + right.getTachoCount())/2;
+			
+			pwr = (0.08 * rate) + (0.12 * tacho) + (0.8 * motorSpeed) + (15 * angle);
+			
+			if (pwr > 500) pwr = 500;
+			if (pwr < -500) pwr = -500;
+			
+			right.setSpeed((int) pwr);
+			left.setSpeed((int) pwr);
+			if (rate < 0){
+				System.out.println("BACK POWER: " + pwr);
+				System.out.println("BACK ANGLE: " + angle);
+				left.backward();
+				right.backward();
+			} 
+			else if (rate > 0){
+				System.out.println("FORW POWER: " + pwr);
+				System.out.println("FORW ANGLE: " + angle);
+				left.forward();
+				right.forward();
+			}
+			Delay.msDelay(10);
+		}
+		right.close();
+		left.close();
+	}
+}

@@ -1,0 +1,16 @@
+package edu.uwec.cs.robotics.segway;
+
+
+public class Segway {
+	public static void main(String[] args) {
+		SegwayController segway = new SegwayController();
+		segway.start();
+		segway.setSpeed(2);
+	//	GyroBoy gb = new GyroBoy();
+	//	gb.start();
+	//	gb.setSpeed(2);
+		
+	//	UltrasonicController uc = new UltrasonicController(segway);
+	//	uc.start();
+	}
+}

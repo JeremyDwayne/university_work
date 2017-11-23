@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Move 4 elements to &apos;gyroboy/src&apos;&#x0A;- Original project: &apos;gyroboy&apos;&#x0A;- Destination element: &apos;gyroboy/src&apos;&#x0A;- Original elements:&#x0A;     GyroBoyApp.java&#x0A;     GyroBoy.java&#x0A;     IR_RemoteControl.java&#x0A;     UltrasonicControl.java&#x0A;- Update references to refactored element" description="Move files" destination="/src" element1="GyroBoyApp.java" element2="GyroBoy.java" element3="IR_RemoteControl.java" element4="UltrasonicControl.java" files="4" flags="589830" folders="0" id="org.eclipse.jdt.ui.move" policy="org.eclipse.jdt.ui.moveResources" qualified="false" references="true" stamp="1495008500603" units="0" version="1.0"/>
+</session>
